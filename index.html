@@ -8,6 +8,9 @@
 </head>
 <body>
     <h1>Salary Data Visualization with Custom Regression by Gender</h1>
+    <label for="education-select">Filter by Education Level:</label> <!-- Added Dropdown -->
+    <select id="education-selector" multiple></select>
+    
     <div id="plot"></div>
     <script>
       // Configurable dimensions
@@ -23,29 +26,59 @@
 
       // Function to load and process data
       async function loadData() {
-        const data = await d3.csv('Salary_Data.csv');
-        processData(data);
-      }
+  const data = await d3.csv('Salary_Data.csv');
+  populateEducationSelector(data); // Populate the dropdown with Education Levels, some wierd ones bec bad data
+  processData(data);
+}
 
-      // Function to process data
-      function processData(data) {
-        data.forEach(d => {
-          d.YearsOfExperience = +d["Years of Experience"];
-          d.Salary = +d.Salary.replace(/,/g, '');
-          d.Gender = d.Gender;
-        });
+// Populate the Education Level selector
+function populateEducationSelector(data) {
+  const educationLevels = Array.from(new Set(data.map(d => d["Education Level"].trim()))); // Trim spaces
+  const selector = d3.select("#education-selector");
+  selector.selectAll("option")
+    .data(educationLevels)
+    .enter()
+    .append("option")
+    .text(d => d)
+    .attr("value", d => d);
 
-        initializePlot(data);
-      }
+    selector.on("change", function() {
+  const selectedEducationLevels = Array.from(selector.node().selectedOptions, option => option.value);
+  processData(data, selectedEducationLevels); // Pass the selected education levels for filtering
+});
+}
+
+function processData(data, selectedEducationLevels = []) {
+  data.forEach(d => {
+    d.YearsOfExperience = +d["Years of Experience"];
+    // Check if d.Salary is a string and contains commas before attempting to replace, first time it is reqritten but not after
+    if (typeof d.Salary === 'string') {
+      d.Salary = +d.Salary.replace(/,/g, '');
+    } else {
+      // Directly convert to number if not a string (or already a number)
+      d.Salary = +d.Salary;
+    }
+    d.Gender = d.Gender;
+  });
+
+  let filteredData = data;
+  if (selectedEducationLevels.length > 0) {
+    filteredData = data.filter(d => selectedEducationLevels.includes(d["Education Level"]));
+  }
+  
+  initializePlot(filteredData); // Use filtered data to initialize the plot
+}
+
 
       // Initialize plot area
       function initializePlot(data) {
-        const svg = setupSVG();
-        const { xScale, yScale } = setupScales(data);
-        drawAxes(svg, xScale, yScale);
-        plotDataPoints(svg, data, xScale, yScale);
-        plotRegressionLines(data, svg, xScale, yScale);
-      }
+  d3.select("#plot").html(""); // Clear the previous SVG to redraw
+  const svg = setupSVG();
+  const { xScale, yScale } = setupScales(data);
+  drawAxes(svg, xScale, yScale);
+  plotDataPoints(svg, data, xScale, yScale);
+  plotRegressionLines(data, svg, xScale, yScale);
+}
 
       // Setup SVG
       function setupSVG() {
