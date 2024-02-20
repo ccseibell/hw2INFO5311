@@ -12,6 +12,8 @@
     <select id="education-selector" multiple></select>
     
     <div id="plot"></div>
+    <div id="plot-age"></div>
+
     <script>
       // Configurable dimensions
       const dimensions = {
@@ -45,6 +47,7 @@ function populateEducationSelector(data) {
     selector.on("change", function() {
   const selectedEducationLevels = Array.from(selector.node().selectedOptions, option => option.value);
   processData(data, selectedEducationLevels); // Pass the selected education levels for filtering
+  
 });
 }
 
@@ -67,6 +70,7 @@ function processData(data, selectedEducationLevels = []) {
   }
   
   initializePlot(filteredData); // Use filtered data to initialize the plot
+  initializePlotWithAge(filteredData); // Plot the new graph using Age
 }
 
 
@@ -141,6 +145,7 @@ function processData(data, selectedEducationLevels = []) {
         // Pass `data` to `drawRegressionLines` to use it for calculating `xRange`
         drawRegressionLines(data, svg, regressionResults, xScale, yScale);
       }
+      
 
       
 
@@ -157,6 +162,22 @@ function processData(data, selectedEducationLevels = []) {
         const lrMale = linearRegression(maleData.map(d => d[1]), maleData.map(d => d[0]));
         return { lrFemale, lrMale };
       }
+
+          function calculateRegressionWithAge(data) {
+        // Assuming data is already filtered and contains Age, Salary, and Gender
+        const femaleData = data.filter(d => d.Gender === "Female").map(d => ({x: +d.Age, y: +d.Salary}));
+        const maleData = data.filter(d => d.Gender === "Male").map(d => ({x: +d.Age, y: +d.Salary}));
+
+        // Calculate regression for females
+        const lrFemale = linearRegression(femaleData.map(d => d.y), femaleData.map(d => d.x));
+        
+        // Calculate regression for males
+        const lrMale = linearRegression(maleData.map(d => d.y), maleData.map(d => d.x));
+
+        return { lrFemale, lrMale };
+    }
+
+          
 
       // Corrected drawRegressionLines to accept `data` as a parameter
       function drawRegressionLines(data, svg, { lrFemale, lrMale }, xScale, yScale) {
@@ -203,6 +224,91 @@ function processData(data, selectedEducationLevels = []) {
 
         return lr;
       }
+
+      function initializePlotWithAge(data) {
+  d3.select("#plot-age").html(""); // Target the new div
+  const svg = d3.select("#plot-age").append("svg")
+      .attr("width", dimensions.width)
+      .attr("height", dimensions.height)
+    .append("g")
+      .attr("transform", `translate(${dimensions.margin.left},${dimensions.margin.top})`);
+
+  const xScale = d3.scaleLinear()
+    .domain([d3.min(data, d => d.Age), d3.max(data, d => d.Age)]) // Use Age for X-axis
+    .range([0, plotWidth]);
+
+  const yScale = d3.scaleLinear()
+    .domain([0, d3.max(data, d => d.Salary)])
+    .range([plotHeight, 0]);
+
+  // Draw axes (update labels accordingly)
+  // X axis for Age
+  svg.append("g")
+    .attr("transform", `translate(0,${plotHeight})`)
+    .call(d3.axisBottom(xScale))
+    .append("text")
+    .attr("x", plotWidth / 2)
+    .attr("y", 40)
+    .attr("fill", "#000")
+    .text("Age");
+
+  // Y axis remains the same
+  svg.append("g")
+    .call(d3.axisLeft(yScale))
+    .append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("y", -50)
+    .attr("x", -plotHeight / 2)
+    .attr("fill", "#000")
+    .text("Salary");
+
+  // Plot data points
+  svg.selectAll(".dot")
+    .data(data)
+    .enter().append("circle")
+    .attr("cx", d => xScale(d.Age)) // Use Age for X-axis
+    .attr("cy", d => yScale(d.Salary))
+    .attr("r", 5)
+    .style("fill", d => d.Gender === "Female" ? "pink" : "blue");
+
+    const genderData = separateDataByGender(data);
+    const regressionResults = calculateRegressionWithAge(data);
+    plotRegressionLinesWithAge(data, svg, xScale, yScale, regressionResults);
+}
+
+function plotRegressionLinesWithAge(data, svg, xScale, yScale, regressionResults) {
+    const { lrFemale, lrMale } = regressionResults;
+
+    // Generate points for the regression line
+    const xRange = d3.range(d3.min(data, d => d.Age), d3.max(data, d => d.Age), 1);
+    const femaleLinePoints = xRange.map(x => ({ x, y: lrFemale.slope * x + lrFemale.intercept }));
+    const maleLinePoints = xRange.map(x => ({ x, y: lrMale.slope * x + lrMale.intercept }));
+
+    // Draw regression lines
+    // Female
+    svg.append("path")
+        .datum(femaleLinePoints)
+        .attr("fill", "none")
+        .attr("stroke", "pink")
+        .attr("stroke-width", 2)
+        .attr("d", d3.line()
+            .x(d => xScale(d.x))
+            .y(d => yScale(d.y)));
+
+    // Male
+    svg.append("path")
+        .datum(maleLinePoints)
+        .attr("fill", "none")
+        .attr("stroke", "blue")
+        .attr("stroke-width", 2)
+        .attr("d", d3.line()
+            .x(d => xScale(d.x))
+            .y(d => yScale(d.y)));
+}
+
+
+
+
 
       loadData(); // Load and process the data
     </script>
